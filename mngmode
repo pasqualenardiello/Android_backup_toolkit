@@ -1,0 +1,280 @@
+#!/bin/bash
+function logo {
+echo "                                                                              ";	
+echo "▄▄▄▄·  ▄▄▄·  ▄▄· ▄ •▄ ▄• ▄▌ ▄▄▄·    • ▌ ▄ ·.  ▄▄▄·  ▐ ▄  ▄▄▄·  ▄▄ • ▄▄▄ .▄▄▄  ";
+echo "▐█ ▀█▪▐█ ▀█ ▐█ ▌▪█▌▄▌▪█▪██▌▐█ ▄█    ·██ ▐███▪▐█ ▀█ •█▌▐█▐█ ▀█ ▐█ ▀ ▪▀▄.▀·▀▄ █·";
+echo "▐█▀▀█▄▄█▀▀█ ██ ▄▄▐▀▀▄·█▌▐█▌ ██▀·    ▐█ ▌▐▌▐█·▄█▀▀█ ▐█▐▐▌▄█▀▀█ ▄█ ▀█▄▐▀▀▪▄▐▀▀▄ ";
+echo "██▄▪▐█▐█ ▪▐▌▐███▌▐█.█▌▐█▄█▌▐█▪·•    ██ ██▌▐█▌▐█ ▪▐▌██▐█▌▐█ ▪▐▌▐█▄▪▐█▐█▄▄▌▐█•█▌";
+echo "·▀▀▀▀  ▀  ▀ ·▀▀▀ ·▀  ▀ ▀▀▀ .▀       ▀▀  █▪▀▀▀ ▀  ▀ ▀▀ █▪ ▀  ▀ ·▀▀▀▀  ▀▀▀ .▀  ▀";
+echo "                                                                              ";
+}
+PARAM="backup"
+function bcksel {
+	TAIL=
+	clear
+	logo
+	phrase5
+	BPS=("RIMOZIONE MULTIPLA" INDIETRO $(ls))
+	PTM=$PTS-info
+	select BP in ${BPS[*]}; do
+		if [ $REPLY -lt 1 ] || [ $REPLY -gt ${#BPS[*]} ]
+			then
+			echo "Backup inesistente"
+			separator
+			phrase5
+			REPLY=
+		elif [ $BP = "INDIETRO" ]
+			then
+			clear
+			logo
+			phrase4
+			REPLY=
+			break
+		elif [ $BP = "RIMOZIONE MULTIPLA" ]
+			then
+			clear
+			logo
+			select RM in "RIMUOVI TUTTO" "RIMUOVI SELEZIONATI" "INDIETRO"; do
+				case $RM in
+				"INDIETRO")
+				clear
+				logo
+				phrase5
+				REPLY=
+				break
+				;;
+				"RIMUOVI TUTTO")
+				rm *
+				usr/local/bin/rmchck $PTS
+				body
+				;;
+				"RIMUOVI SELEZIONATI")
+				if [ -z $TAIL ]
+					then
+					clear
+					logo
+					echo "La coda è vuota, riprova."
+					REPLY=
+				else
+					TAIL=($(echo ${TAIL[*]} | tr ' ' '\n' | sort -u))
+					clear
+					logo
+					printf '%s\n' "${TAIL[@]}"
+					echo
+					echo "Premi d per confermare la cancellazione o qualsiasi altro tasto per tornare indietro:"
+					read DEL
+					if [ $DEL = "d" ]
+						then
+						for ((i=0; i<${#TAIL[*]}; i++));
+						do
+							BP=${TAIL[$i]}
+							BI=$(echo $BP | tr -d 'ab')
+							BI=$BI"info"
+							rm $BP
+							rm "$PTM/$BI"
+						done
+						usr/local/bin/rmchck $PTS
+						body
+					else
+						clear
+						logo
+						phrase5
+						REPLY=
+						break
+					fi
+				fi
+				;;
+				esac
+			done
+		else
+			BI=$(echo $BP | tr -d 'ab')
+			BI=$BI"info"
+			clear
+			logo
+			echo Partizioni salvate:
+			cat "$PTM/$BI"
+			echo
+			echo "Premi a per aggiungere il backup alla coda di cancellazione, d per cancellare direttamente o qualsiasi altro tasto per tornare indietro."
+			read STTM
+			if [ $STTM = "a" ]
+				then
+				if [ -z $TAIL ]
+					then
+					TAIL=($BP)
+				else
+					TAIL=(${TAIL[*]} $BP)
+				fi
+				clear
+				logo
+				phrase5
+				REPLY=
+			elif [ $STTM = "d" ]
+				then
+				rm $BP
+				rm "$PTM/$BI"
+				usr/local/bin/rmchck $PTS
+				body
+			else
+				clear
+				logo
+				phrase5
+				REPLY=
+			fi
+		fi
+	done
+}
+function brestr {
+	echo
+	phrase4
+	OPTS=(${OPTS[*]} INDIETRO)
+	select DV in ${OPTS[*]}; do
+		if [ $REPLY -lt 1 ] || [ $REPLY -gt ${#OPTS[*]} ]
+			then
+			echo "Opzione inesistente"
+			separator
+			phrase4
+			REPLY=
+		elif [ $DV = "INDIETRO" ]
+			then 
+			clear
+			logo
+			phrase3
+			REPLY=
+			break
+		else
+			clear
+			logo
+			echo "Seleziona tipo di filesystem:"
+			select RSP in ext4 f2fs INDIETRO; do
+				case $RSP in
+				ext4)
+				PTS=$(cat /Backup_Android/adb_backup/register | grep ext4 | grep $DV)
+				if [ -z $PTS ]
+					then
+					separator
+					echo "Non sono presenti backup in questo formato"
+					echo "Riprova:"
+					REPLY=
+				else
+					cd $PTS
+					bcksel
+				fi
+				;;
+				f2fs)
+				PTS=$(cat /Backup_Android/adb_backup/register | grep f2fs | grep $DV)
+                        	if [ -z $PTS ]
+                                	then
+					separator
+                                	echo "Non sono presenti backup in questo formato"
+                                	echo "Riprova:"
+                                	REPLY=
+                        	else
+                                	cd $PTS
+					bcksel
+                        	fi
+				;;
+				INDIETRO)
+				clear
+				logo
+				phrase4
+				REPLY=
+				break
+				;;
+				esac
+			done
+		fi
+	done
+}
+function findvend {
+	VNDS=($(cat /Backup_Android/adb_backup/register | tr -s '/' ' ' | awk '{ print $4 }' | uniq))
+}
+function finddev {
+	OPTS=($(cat /Backup_Android/adb_backup/register | grep $PARAM | tr -s '/' ' ' | awk '{ print $6 }' | uniq))
+}
+function separator {
+        echo
+        echo "==============================================================================================================================================="
+        echo
+}
+PS3=">> "
+BACKS=($(cat /Backup_Android/adb_backup/register))
+BACKS=(${BACKS[*]} Esci)
+function phrase6 {
+	echo Seleziona metodo di cancellazione:
+}
+function phrase5 {
+	echo Seleziona backup:
+}
+function phrase4 {
+	echo Seleziona dispositivo:
+}
+function phrase3 {
+	echo Seleziona vendor:
+}
+function phrase2 {
+	echo Seleziona Backup da rimuovere:
+}
+function phrase {
+	echo Scegli il metodo di ricerca:
+}
+adb kill-server
+adb start-server
+function body {
+	clear
+	logo
+	phrase
+	CHS=(Vendor Dispositivo ESCI)
+	select CHOICE in ${CHS[*]}; do
+		case $CHOICE in
+		Vendor)
+		findvend
+		VNDS=(${VNDS[*]} INDIETRO)
+		phrase3
+		select VD in ${VNDS[*]}; do
+			if [ $REPLY -lt 1 ] || [ $REPLY -gt ${#VNDS[*]} ]
+				then
+				echo "Opzione non consentita"
+				separator
+				phrase3
+				REPLY=
+			elif [ $VD = "INDIETRO" ]
+				then
+				clear
+				logo
+				phrase
+				REPLY=
+				break
+			else
+				PARAM=$VD
+				finddev
+			
+			fi
+		done	
+		;;
+		Dispositivo)
+		PARAM="backup"
+		finddev	
+		;;
+		ESCI)
+			CHCK=$(adb devices | sed '/List of devices attached/d')
+                	if [[ -z $CHCK ]]
+                        	then
+                        	clear
+                        	exit
+                	else
+                        	echo "Dispositivo rilevato, passare ad utility di backup e ripristino (si o no)?"
+                        	read answ
+                        	if [ $answ = "si" ]
+                                	then
+                                	/usr/local/bin/backup
+                                	exit
+                        	else
+                                	clear
+                                	exit
+                        	fi
+                	fi
+		;;
+		esac
+	done
+}
+body

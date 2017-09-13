@@ -1,0 +1,341 @@
+#!/bin/bash
+function logo { 
+echo "                                                          ";
+echo "▄▄▄▄·  ▄▄▄·  ▄▄· ▄ •▄ ▄• ▄▌ ▄▄▄·    ▄▄▄▄▄            ▄▄▌  ";
+echo "▐█ ▀█▪▐█ ▀█ ▐█ ▌▪█▌▄▌▪█▪██▌▐█ ▄█    •██  ▪     ▪     ██•  ";
+echo "▐█▀▀█▄▄█▀▀█ ██ ▄▄▐▀▀▄·█▌▐█▌ ██▀·     ▐█.▪ ▄█▀▄  ▄█▀▄ ██▪  ";
+echo "██▄▪▐█▐█ ▪▐▌▐███▌▐█.█▌▐█▄█▌▐█▪·•     ▐█▌·▐█▌.▐▌▐█▌.▐▌▐█▌▐▌";
+echo "·▀▀▀▀  ▀  ▀ ·▀▀▀ ·▀  ▀ ▀▀▀ .▀        ▀▀▀  ▀█▄▀▪ ▀█▄▀▪.▀▀▀ ";
+echo "                                                          ";
+}
+function restr {
+	txt2
+        DIR=($(ls $1) INDIETRO)
+        select ANS in ${DIR[*]}; do
+		if [ $REPLY -lt 1 ] || [ $REPLY -gt ${#DIR[*]} ]
+			then
+                        echo "Backup non esistente"
+                        separator
+                        txt2
+                        REPLY=
+                elif [ $ANS = "INDIETRO" ]
+                        then
+                        clear
+                        logo
+                        txt3
+			REPLY=
+                        break
+                else
+			clear
+			logo
+			echo "Partizioni presenti:"
+			echo
+			cat "$MAP/$NAME.info"
+			echo
+			echo "Procedere con ripristino (si o no)?"
+			read RISP
+			if [ $RISP = "si" ]
+				then
+                        	adb restore $ANS
+				echo "Ripristino effettuato"
+                        	clear
+                        	logo
+                        	txt1
+				break
+			else
+				clear
+				logo
+				txt2
+				REPLY=
+			fi
+		fi
+        done
+}
+function regstr {
+	if [ ! $(cat $REG | grep $BAK) ]
+		then
+		echo $BAK >> $REG
+	fi
+} 
+function getmap {
+	adb shell "
+	cd /dev/block/platform
+	cd *
+	if [ ! -d by-name ]
+		then
+		cd *
+	fi
+	cd by-name
+	ls -al > /sdcard/map.txt
+	cd /sdcard/TWRP/*/*
+	LAST=$(ls -lt | grep ^d | head -1 | cut -b 51-)
+	cd $LAST
+	cp recovery.log /sdcard
+	"
+	if [ ! -e $MAP/map.txt ]
+		then
+		adb pull /sdcard/map.txt $MAP
+	fi
+    	adb pull /sdcard/recovery.log $MAP
+	adb shell rm /sdcard/map.txt
+	adb shell rm /sdcard/recovery.log
+	NINF=$NAME.info
+	/usr/local/bin/infoprovider $MAP $NINF
+}	
+function pitextract {
+	if [ $VENDOR = "samsung" ]
+		then
+		adb shell "
+		dd if=/dev/block/mmcblk0 of=/sdcard/out.pit bs=8 count=580 skip=2176
+		"
+		adb pull /sdcard/out.pit $PIT
+		mv $PIT/out.pit $PIT/$DEVICE_$MODEL.pit
+		echo "Estrazione pit completata"
+	fi
+}
+function info {
+	if [ $(echo $BAK | grep "f2fs") ]
+		then
+		back
+ 		folder $DEVICE-info
+		touch $NAME.info
+		echo ${FS[*]} > $NAME.info
+		back
+		folder $DEVICE
+	fi
+}
+function back {
+	cd ..
+	BAK=$(pwd)
+}
+function txt1 {
+	echo "Seleziona l'opzione da eseguire:"
+}
+function txt2 {
+	echo "Seleziona l'immagine di ripristino:"
+}
+function txt3 {
+	echo "Seleziona il filesystem: "
+}
+function separator {
+	echo
+	echo "==============================================================================================================================================="
+	echo
+}
+function path {
+	cd $BAK/$1_partitions
+	BAK=$BAK/$1_partitions
+}
+function folder {
+	if [ -d $1 ]
+		then
+		cd $BAK/$1
+		BAK=$BAK/$1
+		else
+			mkdir $1
+			cd $BAK/$1
+			BAK=$BAK/$1
+	fi
+}
+adb kill-server
+adb start-server
+cd /
+BAK=""
+PS3=">> "
+folder Backup_Android
+folder adb_backup
+if [ ! -d pitfile ]
+	then
+	mkdir pitfile
+fi
+PIT=$BAK/pitfile
+if [[ ! -d ext4_partitions ]]
+	then
+	mkdir $BAK/ext4_partitions
+fi
+if [[ ! -d f2fs_partitions ]]
+	then
+	mkdir $BAK/f2fs_partitions
+fi
+clear
+logo
+adb devices
+sleep 2
+CHECK=$(adb devices | sed '/List of devices attached/d')
+RECV=$(adb devices | grep recovery)
+FAST=$(fastboot devices | grep fastboot)
+if [[ -z $CHECK ]]
+	then
+	if [[ -z $FAST ]]
+		then
+		echo "Nessun dispositivo rilevato, passare al gestore backup (si o no)?"
+		read ASSERT
+		if [ $ASSERT = "si" ]
+			then
+			/usr/local/bin/mngmode
+			exit
+		else
+			then
+			clear
+			exit
+		fi
+	else
+		echo "Riavvio dispositivo in recovery..."
+		echo
+		sleep 2
+		fastboot reboot recovery
+		sleep 25
+	fi
+else
+	if [[ -z $RECV ]]
+		then
+		echo "Riavvio dispositivo in recovery..."
+		echo
+		sleep 2
+		adb reboot recovery
+		sleep 25
+	else
+		echo "Dispositivo già in recovery..."
+		echo
+		sleep 2
+	fi
+fi
+FS=($(adb shell blkid | grep f2fs | tr -d '\r'))
+VENDOR=$(adb shell getprop ro.product.manufacturer | tr -d '\r')
+DEVICE=$(adb shell getprop ro.product.device | tr -d '\r')
+MODEL=$(adb shell getprop ro.product.model | tr -d '\r')
+adb shell mount system
+VRSN=($(adb shell grep ro.build.version.release /system/build.prop | tr -s '.=' ' '))
+VERSION=${VRSN[4]}.${VRSN[5]}.${VRSN[6]}
+NAME="V$VERSION-$(date --iso-8601=seconds | cut -b -19)"
+cd $BAK
+if [ ! -e register ]
+	then
+	touch register
+fi
+REG=$BAK/register
+if [[ ${FS[*]} == *f2fs* ]]
+	then
+	path f2fs
+	OTHER=/Backup_Android/adb_backup/ext4_partitions
+else
+	path ext4
+	OTHER=/Backup_Android/adb_backup/f2fs_partitions
+fi
+if [[ ! -d "$OTHER/$VENDOR/$MODEL/$DEVICE" ]]
+	then
+	mkdir -p "$OTHER/$VENDOR/$MODEL/$DEVICE"
+fi
+OTHER=$OTHER/$VENDOR/$MODEL/$DEVICE
+folder $VENDOR
+folder $MODEL
+if [ ! -d $DEVICE-map ]
+	then
+	mkdir $DEVICE-map
+fi
+MAP=$BAK/$DEVICE-map
+folder $DEVICE 
+regstr
+echo
+echo "Backup disponibili per il dispositivo:"
+separator
+echo "ext4:"
+if [[ -d "/Backup_Android/adb_backup/ext4_partitions/$VENDOR/$MODEL/$DEVICE" ]]
+	then
+	ls "/Backup_Android/adb_backup/ext4_partitions/$VENDOR/$MODEL/$DEVICE"
+fi
+separator
+echo "f2fs:"
+if [[ -d "/Backup_Android/adb_backup/f2fs_partitions/$VENDOR/$MODEL/$DEVICE" ]]
+	then
+	ls "/Backup_Android/adb_backup/f2fs_partitions/$VENDOR/$MODEL/$DEVICE"
+fi
+separator
+sleep 2
+txt1
+select ans in 'Backup standard' 'Backup selettivo' 'Ripristino immagine' 'Disabilita lockscreen' Esci; do
+	case $ans in
+	'Backup standard')
+		adb backup -f $NAME.ab --twrp boot system data cache --compress
+		info
+		echo "Backup terminato"
+		pitextract
+		getmap
+		clear
+		logo
+		txt1 
+	;;
+	'Backup selettivo')
+		adb backup -f $NAME.ab --twrp
+		info
+		echo "Backup terminato"
+		pitextract
+		getmap
+		clear
+		logo
+		txt1
+	;;
+	'Ripristino immagine')
+		clear
+		logo
+		txt3
+		select RESP in ext4 f2fs INDIETRO; do
+			case $RESP in
+			INDIETRO)
+				clear
+				logo
+				txt1
+				break
+			;;
+			ext4)
+				if [[ $BAK == *ext4* ]]
+					then
+					restr $BAK
+				else
+					restr $OTHER
+				fi
+			;;
+			f2fs)
+				if [[ $BAK == *f2fs* ]]
+					then
+					restr $BAK
+				else
+					restr $OTHER
+				fi
+			;;
+			*)
+				echo Opzione non contemplata
+				separator
+				txt3
+				REPLY=
+			;;
+			esac
+		done
+	;;
+	'Disabilita lockscreen')
+		adb shell "
+		mount /data
+		cd /data/system
+		rm *.key
+		rm locksettings*
+		"
+		echo "Rimozione eseguita"
+		clear
+		logo
+		txt1
+	;;
+	Esci)
+		clear
+		adb reboot
+		/usr/local/bin/rmchck $BAK
+		/usr/local/bin/rmchck $OTHER
+		exit 0
+	;;
+	*)
+		echo "Opzione non consentita"
+		separator
+		txt1
+	;;
+	esac
+	REPLY=
+done

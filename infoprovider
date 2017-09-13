@@ -1,0 +1,21 @@
+#!/bin/bash
+PARTS=($(cat $1/recovery.log | grep "Backup di" | awk '{ print $3 }' | uniq | sed '/Immagine/d' | tr '[A-Z]' '[a-z]'))
+for ((i=0; i<${#PARTS[*]}; i++));
+do
+	if [[ ${PARTS[$i]} = "data" ]]
+		then
+		PARTS[$i]="userdata"
+	elif [[ ${PARTS[$i]} = "efs" ]]
+		then
+		PARTS[$i]="modemst1"
+	elif [[ ${PARTS[$i]} = "efs2" ]]
+		then
+		PARTS[$i]="modemst2"
+	fi
+done
+touch $1/$2
+for (( i=0; i<${#PARTS[*]}; i++ ));
+do
+	cat $1/map.txt | grep -w ${PARTS[i]} | awk '{ print $9 $10 $11 }' >> $1/$2
+done
+rm $1/recovery.log

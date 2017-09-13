@@ -1,0 +1,32 @@
+#!/bin/bash
+function remv {
+	HERE=$(pwd)
+	ELMS=$(ls $HERE)
+	if [ $HERE = "/Backup_Android/adb_backup/ext4_partitions" ] || [ $HERE = "/Backup_Android/adb_backup/f2fs_partitions" ]
+		then
+		exit
+	fi
+	if [[ -z $ELMS ]]
+		then
+		cd ..
+		if [[ -d $DEV-map ]]
+			then
+			rmdir $DEV
+			rm -rf $DEV-map
+		elif [[ -d $CDN ]]
+			then
+			rmdir $CDN
+		else
+			rmdir $VND
+		fi
+		sed -i "\|$PR|d" /Backup_Android/adb_backup/register
+	fi
+	remv
+}
+cd $1
+PR=$(pwd)
+PT=($(echo $1 | tr -s '/' ' '))
+DEV=${PT[5]}
+CDN=${PT[4]}
+VND=${PT[3]}
+remv
